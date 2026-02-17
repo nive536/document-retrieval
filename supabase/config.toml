@@ -1,0 +1,7 @@
+project_id = "dkjcsvzatbcgiqickybq"
+
+[functions.chat]
+verify_jwt = false
+
+[functions.extract-text]
+verify_jwt = false
