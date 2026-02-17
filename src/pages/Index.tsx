@@ -36,6 +36,11 @@ const Index = () => {
     fetchDocuments();
   }, [fetchDocuments]);
 
+  const handleUploaded = (docId: string) => {
+    fetchDocuments();
+    setSelectedDocId(docId);
+  };
+
   const handleDelete = async (id: string) => {
     const doc = documents.find((d) => d.id === id);
     if (!doc) return;
@@ -69,7 +74,7 @@ const Index = () => {
       <UploadDialog
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}
-        onUploaded={fetchDocuments}
+        onUploaded={handleUploaded}
       />
     </div>
   );
