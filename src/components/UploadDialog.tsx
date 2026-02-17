@@ -9,7 +9,7 @@ import { toast } from "sonner";
 interface UploadDialogProps {
   open: boolean;
   onClose: () => void;
-  onUploaded: () => void;
+  onUploaded: (docId: string) => void;
 }
 
 export default function UploadDialog({ open, onClose, onUploaded }: UploadDialogProps) {
@@ -61,14 +61,21 @@ export default function UploadDialog({ open, onClose, onUploaded }: UploadDialog
 
       if (dbError) throw dbError;
 
-      // Trigger text extraction
-      supabase.functions.invoke("extract-text", {
+      // Trigger text extraction and wait for it
+      toast.info("Extracting text from document...");
+      const { error: extractError } = await supabase.functions.invoke("extract-text", {
         body: { documentId: doc.id, filePath },
-      }).catch(console.error);
+      });
 
-      toast.success(`"${file.name}" uploaded successfully`);
+      if (extractError) {
+        console.error("Text extraction failed:", extractError);
+        toast.warning("Document uploaded but text extraction failed. AI may not be able to answer questions about it.");
+      } else {
+        toast.success(`"${file.name}" uploaded and analyzed`);
+      }
+
       setFile(null);
-      onUploaded();
+      onUploaded(doc.id);
       onClose();
     } catch (err: any) {
       toast.error(err.message || "Upload failed");
