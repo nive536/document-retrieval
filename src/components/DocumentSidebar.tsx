@@ -1,6 +1,7 @@
-import { FileText, Plus, Trash2, Loader2 } from "lucide-react";
+import { FileText, Plus, Trash2, Loader2, CheckSquare, Square } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import ThemeToggle from "./ThemeToggle";
 
 interface Document {
   id: string;
@@ -11,8 +12,8 @@ interface Document {
 
 interface DocumentSidebarProps {
   documents: Document[];
-  selectedDocId: string | null;
-  onSelect: (id: string) => void;
+  selectedDocIds: string[];
+  onToggleSelect: (id: string) => void;
   onUploadClick: () => void;
   onDelete: (id: string) => void;
   isLoading: boolean;
@@ -27,8 +28,8 @@ function formatSize(bytes?: number) {
 
 export default function DocumentSidebar({
   documents,
-  selectedDocId,
-  onSelect,
+  selectedDocIds,
+  onToggleSelect,
   onUploadClick,
   onDelete,
   isLoading,
@@ -37,11 +38,14 @@ export default function DocumentSidebar({
     <aside className="w-72 h-full flex flex-col bg-sidebar border-r border-sidebar-border">
       {/* Header */}
       <div className="p-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-            <FileText className="w-4 h-4 text-primary-foreground" />
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center glow-primary">
+              <FileText className="w-4 h-4 text-primary-foreground" />
+            </div>
+            <h1 className="font-display text-lg font-bold text-sidebar-foreground">DocuMind</h1>
           </div>
-          <h1 className="font-display text-lg font-bold text-sidebar-foreground">DocuMind</h1>
+          <ThemeToggle />
         </div>
         <Button
           onClick={onUploadClick}
@@ -51,6 +55,13 @@ export default function DocumentSidebar({
           Upload Document
         </Button>
       </div>
+
+      {/* Hint */}
+      {documents.length > 0 && (
+        <div className="px-4 pt-3 pb-1">
+          <p className="text-[11px] text-muted-foreground">Click to select documents for chat context</p>
+        </div>
+      )}
 
       {/* Document List */}
       <div className="flex-1 overflow-y-auto p-2">
@@ -66,44 +77,60 @@ export default function DocumentSidebar({
           </div>
         ) : (
           <AnimatePresence>
-            {documents.map((doc) => (
-              <motion.button
-                key={doc.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                onClick={() => onSelect(doc.id)}
-                className={`w-full text-left p-3 rounded-lg mb-1 group transition-colors ${
-                  selectedDocId === doc.id
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent/50"
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-2 min-w-0 flex-1">
-                    <FileText className="w-4 h-4 mt-0.5 flex-shrink-0 text-sidebar-primary" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{doc.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {formatSize(doc.file_size)}
-                      </p>
+            {documents.map((doc) => {
+              const isSelected = selectedDocIds.includes(doc.id);
+              return (
+                <motion.button
+                  key={doc.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  onClick={() => onToggleSelect(doc.id)}
+                  className={`w-full text-left p-3 rounded-lg mb-1 group transition-colors ${
+                    isSelected
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-sidebar-primary/30"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-2 min-w-0 flex-1">
+                      {isSelected ? (
+                        <CheckSquare className="w-4 h-4 mt-0.5 flex-shrink-0 text-sidebar-primary" />
+                      ) : (
+                        <Square className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{doc.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {formatSize(doc.file_size)}
+                        </p>
+                      </div>
                     </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(doc.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/20 transition-all"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                    </button>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(doc.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/20 transition-all"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                  </button>
-                </div>
-              </motion.button>
-            ))}
+                </motion.button>
+              );
+            })}
           </AnimatePresence>
         )}
       </div>
+
+      {/* Selected count */}
+      {selectedDocIds.length > 0 && (
+        <div className="p-3 border-t border-sidebar-border">
+          <p className="text-xs text-sidebar-primary font-medium text-center">
+            {selectedDocIds.length} document{selectedDocIds.length > 1 ? "s" : ""} selected for context
+          </p>
+        </div>
+      )}
     </aside>
   );
 }

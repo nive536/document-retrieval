@@ -10,25 +10,30 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, documentId } = await req.json();
+    const { messages, documentIds } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     let documentContext = "";
 
-    if (documentId) {
+    if (documentIds && documentIds.length > 0) {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       const supabase = createClient(supabaseUrl, supabaseKey);
 
-      const { data: doc } = await supabase
+      const { data: docs } = await supabase
         .from("documents")
         .select("name, extracted_text")
-        .eq("id", documentId)
-        .single();
+        .in("id", documentIds);
 
-      if (doc?.extracted_text) {
-        documentContext = `\n\nYou have access to the following document:\nDocument Name: ${doc.name}\nDocument Content:\n${doc.extracted_text}\n\nAnswer questions based on this document. If the answer is not in the document, say so clearly.`;
+      if (docs && docs.length > 0) {
+        documentContext = "\n\nYou have access to the following documents:\n";
+        docs.forEach((doc, i) => {
+          if (doc.extracted_text) {
+            documentContext += `\n--- Document ${i + 1}: "${doc.name}" ---\n${doc.extracted_text}\n--- End of "${doc.name}" ---\n`;
+          }
+        });
+        documentContext += `\nWhen answering questions based on these documents, ALWAYS cite your sources at the end of your answer in the following format:\n\n**Sources:**\n- [Document Name] (Page X, if determinable from content)\n\nIf the content has page markers or numbered sections, reference the specific page. If you cannot determine the page number, just cite the document name. If the answer is not found in any document, say so clearly.`;
       }
     }
 
