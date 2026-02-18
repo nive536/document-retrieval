@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Sparkles, FileText } from "lucide-react";
+import { Send, Loader2, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import ChatMessage from "./ChatMessage";
@@ -12,11 +12,11 @@ interface Message {
 }
 
 interface ChatInterfaceProps {
-  documentIds: string[];
-  documentNames: string[];
+  documentId: string | null;
+  documentName: string | null;
 }
 
-export default function ChatInterface({ documentIds, documentNames }: ChatInterfaceProps) {
+export default function ChatInterface({ documentId, documentName }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -24,7 +24,7 @@ export default function ChatInterface({ documentIds, documentNames }: ChatInterf
 
   useEffect(() => {
     setMessages([]);
-  }, [documentIds.join(",")]);
+  }, [documentId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -58,7 +58,7 @@ export default function ChatInterface({ documentIds, documentNames }: ChatInterf
     try {
       await streamChat({
         messages: [...messages, userMsg],
-        documentIds: documentIds.length > 0 ? documentIds : undefined,
+        documentId: documentId || undefined,
         onDelta: upsertAssistant,
         onDone: () => setIsLoading(false),
         onError: (error) => {
@@ -73,8 +73,6 @@ export default function ChatInterface({ documentIds, documentNames }: ChatInterf
     }
   };
 
-  const hasDocuments = documentIds.length > 0;
-
   return (
     <div className="flex-1 flex flex-col h-full">
       {/* Header */}
@@ -82,26 +80,12 @@ export default function ChatInterface({ documentIds, documentNames }: ChatInterf
         <div className="flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-primary" />
           <h2 className="font-display font-semibold text-foreground">
-            {hasDocuments
-              ? `Chat with ${documentNames.length} document${documentNames.length > 1 ? "s" : ""}`
-              : "DocuMind AI"}
+            {documentName ? `Chat with "${documentName}"` : "DocuMind AI"}
           </h2>
         </div>
-        {hasDocuments ? (
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {documentNames.map((name) => (
-              <span
-                key={name}
-                className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20"
-              >
-                <FileText className="w-3 h-3" />
-                {name}
-              </span>
-            ))}
-          </div>
-        ) : (
+        {!documentId && (
           <p className="text-sm text-muted-foreground mt-1">
-            Select documents to ask questions, or chat freely
+            Upload a document to ask questions about it, or chat freely
           </p>
         )}
       </div>
@@ -118,16 +102,16 @@ export default function ChatInterface({ documentIds, documentNames }: ChatInterf
               <Sparkles className="w-8 h-8 text-primary-foreground" />
             </div>
             <h3 className="font-display text-xl font-semibold text-foreground mb-2">
-              {hasDocuments ? "Ask anything about your documents" : "Welcome to DocuMind"}
+              {documentId ? "Ask anything about your document" : "Welcome to DocuMind"}
             </h3>
             <p className="text-muted-foreground max-w-md text-sm">
-              {hasDocuments
-                ? `I've analyzed ${documentNames.length} document${documentNames.length > 1 ? "s" : ""}. Ask me questions and I'll find answers with source references.`
-                : "Upload documents and select them to start asking questions. I'll cite sources in my answers."}
+              {documentId
+                ? "I've analyzed your document. Ask me questions and I'll find the answers."
+                : "Upload a document and start asking questions. I'll help you understand your data."}
             </p>
             <div className="flex gap-2 mt-6 flex-wrap justify-center">
-              {(hasDocuments
-                ? ["Summarize these documents", "What are the key points?", "Compare the documents"]
+              {(documentId
+                ? ["Summarize this document", "What are the key points?", "Explain in simple terms"]
                 : ["What can you do?", "How does this work?", "Help me get started"]
               ).map((suggestion) => (
                 <button
@@ -172,7 +156,7 @@ export default function ChatInterface({ documentIds, documentNames }: ChatInterf
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={hasDocuments ? "Ask about your documents..." : "Type a message..."}
+            placeholder={documentId ? "Ask about your document..." : "Type a message..."}
             disabled={isLoading}
             className="flex-1 px-4 py-3 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm"
           />
