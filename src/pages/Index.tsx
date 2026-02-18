@@ -14,7 +14,7 @@ interface Document {
 
 const Index = () => {
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -38,7 +38,13 @@ const Index = () => {
 
   const handleUploaded = (docId: string) => {
     fetchDocuments();
-    setSelectedDocId(docId);
+    setSelectedDocIds((prev) => (prev.includes(docId) ? prev : [...prev, docId]));
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedDocIds((prev) =>
+      prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]
+    );
   };
 
   const handleDelete = async (id: string) => {
@@ -49,27 +55,29 @@ const Index = () => {
     if (error) {
       toast.error("Failed to delete document");
     } else {
-      if (selectedDocId === id) setSelectedDocId(null);
+      setSelectedDocIds((prev) => prev.filter((d) => d !== id));
       fetchDocuments();
       toast.success(`"${doc.name}" deleted`);
     }
   };
 
-  const selectedDoc = documents.find((d) => d.id === selectedDocId);
+  const selectedNames = documents
+    .filter((d) => selectedDocIds.includes(d.id))
+    .map((d) => d.name);
 
   return (
     <div className="flex h-screen bg-background">
       <DocumentSidebar
         documents={documents}
-        selectedDocId={selectedDocId}
-        onSelect={setSelectedDocId}
+        selectedDocIds={selectedDocIds}
+        onToggleSelect={handleToggleSelect}
         onUploadClick={() => setUploadOpen(true)}
         onDelete={handleDelete}
         isLoading={loading}
       />
       <ChatInterface
-        documentId={selectedDocId}
-        documentName={selectedDoc?.name || null}
+        documentIds={selectedDocIds}
+        documentNames={selectedNames}
       />
       <UploadDialog
         open={uploadOpen}
