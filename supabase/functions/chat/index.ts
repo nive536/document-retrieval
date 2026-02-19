@@ -15,6 +15,7 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     let documentContext = "";
+    let documentName = "";
 
     if (documentId) {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -28,7 +29,8 @@ serve(async (req) => {
         .single();
 
       if (doc?.extracted_text) {
-        documentContext = `\n\nYou have access to the following document:\nDocument Name: ${doc.name}\nDocument Content:\n${doc.extracted_text}\n\nAnswer questions based on this document. If the answer is not in the document, say so clearly.`;
+        documentName = doc.name;
+        documentContext = `\n\nYou have access to the following document:\nDocument Name: ${doc.name}\nDocument Content:\n${doc.extracted_text}\n\nAnswer questions based on this document. If the answer is not in the document, say so clearly.\n\nIMPORTANT: At the end of EVERY response that references information from the document, you MUST include a source attribution section formatted EXACTLY like this:\n\n---\n📄 **Source:** ${doc.name}\n\nIf you can identify specific sections or page numbers, include them like:\n📄 **Source:** ${doc.name} — Section/Page X\n\nAlways include this source block when your answer draws from the document content.`;
       }
     }
 

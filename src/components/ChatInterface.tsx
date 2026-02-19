@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Sparkles } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Send, Loader2, Sparkles, Trash2, Save } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import ChatMessage from "./ChatMessage";
 import { streamChat } from "@/lib/chat-stream";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface Message {
@@ -20,17 +21,61 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    setMessages([]);
+  // Load chat history when document changes
+  const loadHistory = useCallback(async () => {
+    setHistoryLoaded(false);
+    const query = supabase
+      .from("chat_messages")
+      .select("role, content")
+      .order("created_at", { ascending: true });
+
+    if (documentId) {
+      query.eq("document_id", documentId);
+    } else {
+      query.is("document_id", null);
+    }
+
+    const { data } = await query;
+    if (data && data.length > 0) {
+      setMessages(data.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })));
+    } else {
+      setMessages([]);
+    }
+    setHistoryLoaded(true);
   }, [documentId]);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const saveMessage = async (role: string, content: string) => {
+    await supabase.from("chat_messages").insert({
+      role,
+      content,
+      document_id: documentId || null,
+    });
+  };
+
+  const handleClearHistory = async () => {
+    const query = supabase.from("chat_messages").delete();
+    if (documentId) {
+      query.eq("document_id", documentId);
+    } else {
+      query.is("document_id", null);
+    }
+    await query;
+    setMessages([]);
+    toast.success("Chat history cleared");
+  };
 
   const send = async () => {
     const trimmed = input.trim();
@@ -40,6 +85,9 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
+
+    // Save user message
+    saveMessage("user", trimmed);
 
     let assistantSoFar = "";
     const upsertAssistant = (chunk: string) => {
@@ -60,7 +108,11 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
         messages: [...messages, userMsg],
         documentId: documentId || undefined,
         onDelta: upsertAssistant,
-        onDone: () => setIsLoading(false),
+        onDone: () => {
+          setIsLoading(false);
+          // Save assistant message
+          if (assistantSoFar) saveMessage("assistant", assistantSoFar);
+        },
         onError: (error) => {
           toast.error(error);
           setIsLoading(false);
@@ -77,11 +129,24 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
     <div className="flex-1 flex flex-col h-full">
       {/* Header */}
       <div className="border-b border-border px-6 py-4">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-primary" />
-          <h2 className="font-display font-semibold text-foreground">
-            {documentName ? `Chat with "${documentName}"` : "DocuMind AI"}
-          </h2>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-primary" />
+            <h2 className="font-display font-semibold text-foreground">
+              {documentName ? `Chat with "${documentName}"` : "DocuMind AI"}
+            </h2>
+          </div>
+          {messages.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearHistory}
+              className="text-muted-foreground hover:text-destructive gap-1.5 text-xs"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Clear History
+            </Button>
+          )}
         </div>
         {!documentId && (
           <p className="text-sm text-muted-foreground mt-1">
@@ -92,7 +157,7 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-        {messages.length === 0 && (
+        {messages.length === 0 && historyLoaded && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
