@@ -32,7 +32,13 @@ serve(async (req) => {
       }
     }
 
-    const systemPrompt = `You are DocuMind, an intelligent document assistant. You help users understand and interact with their documents. Be concise, helpful, and accurate. Format your responses with markdown when appropriate.${documentContext}`;
+    const systemPrompt = `You are DocuMind, an intelligent document assistant. You help users understand and interact with their documents. Be concise, helpful, and accurate. Format your responses with markdown when appropriate.${documentContext}
+
+IMPORTANT: When answering questions based on a document, you MUST include source attribution at the end of your response in this exact format:
+---
+📄 **Source:** [Document Name] — Page/Section referenced
+
+If you reference multiple sections, list each source on its own line. If no document is loaded, skip source attribution.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
