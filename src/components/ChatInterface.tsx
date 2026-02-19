@@ -1,10 +1,9 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Loader2, Sparkles, Trash2, Sun, Moon } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Send, Loader2, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import ChatMessage from "./ChatMessage";
 import { streamChat } from "@/lib/chat-stream";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface Message {
@@ -21,58 +20,17 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Load chat history when document changes
-  const loadHistory = useCallback(async () => {
-    if (!documentId) {
-      setMessages([]);
-      return;
-    }
-    const { data } = await supabase
-      .from("chat_messages")
-      .select("role, content")
-      .eq("document_id", documentId)
-      .order("created_at", { ascending: true });
-    if (data && data.length > 0) {
-      setMessages(data.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })));
-    } else {
-      setMessages([]);
-    }
-  }, [documentId]);
-
   useEffect(() => {
-    loadHistory();
-  }, [loadHistory]);
+    setMessages([]);
+  }, [documentId]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
-
-  const toggleTheme = () => {
-    const next = !isDark;
-    setIsDark(next);
-    document.documentElement.classList.toggle("dark", next);
-  };
-
-  const saveMessage = async (role: string, content: string) => {
-    await supabase.from("chat_messages").insert({
-      role,
-      content,
-      document_id: documentId,
-    });
-  };
-
-  const clearHistory = async () => {
-    if (documentId) {
-      await supabase.from("chat_messages").delete().eq("document_id", documentId);
-    }
-    setMessages([]);
-    toast.success("Chat history cleared");
-  };
 
   const send = async () => {
     const trimmed = input.trim();
@@ -82,9 +40,6 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
-
-    // Save user message
-    saveMessage("user", trimmed);
 
     let assistantSoFar = "";
     const upsertAssistant = (chunk: string) => {
@@ -105,11 +60,7 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
         messages: [...messages, userMsg],
         documentId: documentId || undefined,
         onDelta: upsertAssistant,
-        onDone: () => {
-          setIsLoading(false);
-          // Save assistant message
-          if (assistantSoFar) saveMessage("assistant", assistantSoFar);
-        },
+        onDone: () => setIsLoading(false),
         onError: (error) => {
           toast.error(error);
           setIsLoading(false);
@@ -126,23 +77,11 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
     <div className="flex-1 flex flex-col h-full">
       {/* Header */}
       <div className="border-b border-border px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-primary" />
-            <h2 className="font-display font-semibold text-foreground">
-              {documentName ? `Chat with "${documentName}"` : "DocuMind AI"}
-            </h2>
-          </div>
-          <div className="flex items-center gap-1">
-            {messages.length > 0 && (
-              <Button variant="ghost" size="icon" onClick={clearHistory} title="Clear chat history">
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            )}
-            <Button variant="ghost" size="icon" onClick={toggleTheme} title="Toggle theme">
-              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </Button>
-          </div>
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-primary" />
+          <h2 className="font-display font-semibold text-foreground">
+            {documentName ? `Chat with "${documentName}"` : "DocuMind AI"}
+          </h2>
         </div>
         {!documentId && (
           <p className="text-sm text-muted-foreground mt-1">
