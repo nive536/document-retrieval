@@ -1,6 +1,7 @@
 import { FileText, Plus, Trash2, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import ThemeToggle from "./ThemeToggle";
 
 interface Document {
   id: string;
@@ -37,11 +38,14 @@ export default function DocumentSidebar({
     <aside className="w-72 h-full flex flex-col bg-sidebar border-r border-sidebar-border">
       {/* Header */}
       <div className="p-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-            <FileText className="w-4 h-4 text-primary-foreground" />
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
+              <FileText className="w-4 h-4 text-primary-foreground" />
+            </div>
+            <h1 className="font-display text-lg font-bold text-sidebar-foreground">DocuMind</h1>
           </div>
-          <h1 className="font-display text-lg font-bold text-sidebar-foreground">DocuMind</h1>
+          <ThemeToggle />
         </div>
         <Button
           onClick={onUploadClick}
