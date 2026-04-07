@@ -128,31 +128,36 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
         </div>
 
         {/* Source attribution tags */}
-        {!isUser && (sourceMatch || webSources.length > 0) && (
-          <div className="flex flex-wrap gap-2">
-            {sourceMatch && (
+        {!isUser && (docSources.length > 0 || webSources.length > 0) && (
+          <div className="flex flex-col gap-2">
+            {docSources.map((src, i) => (
               <motion.div
+                key={`doc-${i}`}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 w-fit"
+                transition={{ delay: i * 0.05 }}
+                className="flex items-start gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20"
               >
-                <FileText className="w-3 h-3 text-primary" />
+                <FileText className="w-3 h-3 text-primary mt-0.5 flex-shrink-0" />
                 <span className="text-xs font-medium text-primary">
-                  {sourceMatch[0].replace(/---\n/, "").replace(/\*\*/g, "").replace(/📄\s?/, "").trim()}
+                  {src.replace(/\*\*/g, "")}
                 </span>
               </motion.div>
-            )}
-            {webSources.length > 0 && (
+            ))}
+            {webSources.map((src, i) => (
               <motion.div
+                key={`web-${i}`}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 w-fit"
+                transition={{ delay: 0.1 + i * 0.05 }}
+                className="flex items-start gap-1.5 px-3 py-1.5 rounded-lg bg-accent/50 border border-border"
               >
-                <Globe className="w-3 h-3 text-blue-500" />
-                <span className="text-xs font-medium text-blue-500">Web Knowledge</span>
+                <Globe className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <span className="text-xs font-medium text-muted-foreground">
+                  {src.replace(/\*\*/g, "")}
+                </span>
               </motion.div>
-            )}
+            ))}
           </div>
         )}
 
