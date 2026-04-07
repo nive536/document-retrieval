@@ -10,7 +10,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, documentId } = await req.json();
+    const { messages, documentId, webSearch } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -30,11 +30,70 @@ serve(async (req) => {
 
       if (doc?.extracted_text) {
         documentName = doc.name;
-        documentContext = `\n\nYou have access to the following document:\nDocument Name: ${doc.name}\nDocument Content:\n${doc.extracted_text}\n\nAnswer questions based on this document. If the answer is not in the document, say so clearly.\n\nIMPORTANT: At the end of EVERY response that references information from the document, you MUST include a source attribution section formatted EXACTLY like this:\n\n---\n📄 **Source:** ${doc.name}\n\nIf you can identify specific sections or page numbers, include them like:\n📄 **Source:** ${doc.name} — Section/Page X\n\nAlways include this source block when your answer draws from the document content.`;
+        documentContext = `\n\nYou have access to the following document:\nDocument Name: ${doc.name}\nDocument Content:\n${doc.extracted_text}\n\nAnswer questions based on this document. If the answer is not in the document, say so clearly.`;
       }
     }
 
-    const systemPrompt = `You are DocuMind, an intelligent document assistant. You help users understand and interact with their documents. Be concise, helpful, and accurate. Format your responses with markdown when appropriate.${documentContext}`;
+    // If web search is requested, do a preliminary AI call for web knowledge
+    let webContext = "";
+    if (webSearch) {
+      const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
+      try {
+        const webRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            messages: [
+              {
+                role: "system",
+                content: "You are a research assistant. Provide factual, up-to-date information on the given topic. Include specific facts, statistics, dates, and notable details. Cite general knowledge sources where possible (e.g., Wikipedia, official documentation, research papers). Be concise but comprehensive. Format as bullet points.",
+              },
+              {
+                role: "user",
+                content: `Provide additional background information and context on this topic: "${lastUserMsg}"`,
+              },
+            ],
+            stream: false,
+          }),
+        });
+        if (webRes.ok) {
+          const webData = await webRes.json();
+          const webContent = webData.choices?.[0]?.message?.content;
+          if (webContent) {
+            webContext = `\n\n--- ADDITIONAL KNOWLEDGE ---\nThe following is supplementary information from general knowledge sources:\n${webContent}\n--- END ADDITIONAL KNOWLEDGE ---\n`;
+          }
+        }
+      } catch (e) {
+        console.error("Web knowledge fetch failed:", e);
+      }
+    }
+
+    const systemPrompt = `You are DocuMind, an intelligent document assistant. You help users understand and interact with their documents. Be concise, helpful, and accurate. Format your responses with markdown when appropriate.${documentContext}${webContext}
+
+RESPONSE FORMAT RULES:
+1. Always structure your answers clearly with headings, bullet points, or numbered lists when appropriate.
+2. After your main answer, ALWAYS include a "Follow-up" section with 3 short suggested questions the user might want to ask next, formatted as:
+
+---
+💡 **Follow-up questions:**
+- [Question 1]
+- [Question 2]  
+- [Question 3]
+
+3. If you used information from the ADDITIONAL KNOWLEDGE section, include a "Sources" section:
+
+🌐 **Web Knowledge Sources:**
+- [Source description or topic area]
+
+4. If you referenced the document, include:
+
+📄 **Source:** ${documentName || "Uploaded Document"}
+
+5. Make answers interactive: use bold for key terms, include practical examples, and offer actionable insights.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

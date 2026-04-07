@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
-import { Bot, User, Copy, Check, Volume2, VolumeX } from "lucide-react";
+import { Bot, User, Copy, Check, Volume2, VolumeX, Globe, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
+  onFollowUp?: (question: string) => void;
 }
 
-export default function ChatMessage({ role, content }: ChatMessageProps) {
+export default function ChatMessage({ role, content, onFollowUp }: ChatMessageProps) {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
   const [speaking, setSpeaking] = useState(false);
@@ -36,6 +37,8 @@ export default function ChatMessage({ role, content }: ChatMessageProps) {
       .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
       .replace(/---+/g, "")
       .replace(/📄/g, "Source: ")
+      .replace(/💡/g, "")
+      .replace(/🌐/g, "")
       .replace(/\n{2,}/g, ". ")
       .replace(/\n/g, " ")
       .trim();
@@ -49,10 +52,50 @@ export default function ChatMessage({ role, content }: ChatMessageProps) {
     window.speechSynthesis.speak(utterance);
   };
 
-  // Split content into main body and source attribution
+  // Parse content sections
   const sourceMatch = content.match(/---\n📄\s?\*\*Source:\*\*.*/s);
-  const mainContent = sourceMatch ? content.slice(0, sourceMatch.index).trim() : content;
-  const sourceBlock = sourceMatch ? sourceMatch[0] : null;
+  const followUpMatch = content.match(/---\n💡\s?\*\*Follow-up questions:\*\*\n([\s\S]*?)(?=\n---|$)/);
+  const webSourceMatch = content.match(/🌐\s?\*\*Web Knowledge Sources:\*\*\n([\s\S]*?)(?=\n---|$)/);
+
+  // Extract follow-up questions
+  const followUpQuestions: string[] = [];
+  if (followUpMatch) {
+    const lines = followUpMatch[1].split("\n");
+    for (const line of lines) {
+      const q = line.replace(/^-\s*/, "").trim();
+      if (q) followUpQuestions.push(q);
+    }
+  }
+
+  // Extract web sources
+  const webSources: string[] = [];
+  if (webSourceMatch) {
+    const lines = webSourceMatch[1].split("\n");
+    for (const line of lines) {
+      const s = line.replace(/^-\s*/, "").trim();
+      if (s) webSources.push(s);
+    }
+  }
+
+  // Clean main content (remove follow-up and source sections for main display)
+  let mainContent = content;
+  // Remove follow-up section
+  const followUpIdx = mainContent.indexOf("---\n💡 **Follow-up questions:**");
+  if (followUpIdx !== -1) {
+    mainContent = mainContent.slice(0, followUpIdx).trim();
+  }
+  // Remove web sources section from main content
+  const webIdx = mainContent.indexOf("🌐 **Web Knowledge Sources:**");
+  if (webIdx !== -1) {
+    mainContent = mainContent.slice(0, webIdx).trim();
+  }
+  // Remove doc source from main content
+  const docIdx = mainContent.indexOf("📄 **Source:**");
+  if (docIdx !== -1) {
+    mainContent = mainContent.slice(0, docIdx).trim();
+  }
+  // Clean trailing ---
+  mainContent = mainContent.replace(/\n---\s*$/, "").trim();
 
   return (
     <motion.div
@@ -86,16 +129,52 @@ export default function ChatMessage({ role, content }: ChatMessageProps) {
           )}
         </div>
 
-        {/* Source attribution tag */}
-        {!isUser && sourceBlock && (
+        {/* Source attribution tags */}
+        {!isUser && (sourceMatch || webSources.length > 0) && (
+          <div className="flex flex-wrap gap-2">
+            {sourceMatch && (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 w-fit"
+              >
+                <FileText className="w-3 h-3 text-primary" />
+                <span className="text-xs font-medium text-primary">
+                  {sourceMatch[0].replace(/---\n/, "").replace(/\*\*/g, "").replace(/📄\s?/, "").trim()}
+                </span>
+              </motion.div>
+            )}
+            {webSources.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 w-fit"
+              >
+                <Globe className="w-3 h-3 text-blue-500" />
+                <span className="text-xs font-medium text-blue-500">Web Knowledge</span>
+              </motion.div>
+            )}
+          </div>
+        )}
+
+        {/* Follow-up suggestion chips */}
+        {!isUser && followUpQuestions.length > 0 && onFollowUp && (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 w-fit"
+            transition={{ delay: 0.2 }}
+            className="flex flex-wrap gap-2"
           >
-            <span className="text-xs font-medium text-primary">
-              {sourceBlock.replace(/---\n/, "").replace(/\*\*/g, "").trim()}
-            </span>
+            {followUpQuestions.map((q, i) => (
+              <button
+                key={i}
+                onClick={() => onFollowUp(q)}
+                className="px-3 py-1.5 rounded-full border border-border bg-background text-xs text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-primary/5 transition-all duration-200"
+              >
+                💡 {q}
+              </button>
+            ))}
           </motion.div>
         )}
 
