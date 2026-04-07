@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Loader2, Sparkles, Trash2, Save } from "lucide-react";
+import { Send, Loader2, Sparkles, Trash2, Globe } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import ChatMessage from "./ChatMessage";
@@ -22,9 +22,9 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Load chat history when document changes
   const loadHistory = useCallback(async () => {
     setHistoryLoaded(false);
     const query = supabase
@@ -77,8 +77,12 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
     toast.success("Chat history cleared");
   };
 
-  const send = async () => {
-    const trimmed = input.trim();
+  const handleFollowUp = (question: string) => {
+    setInput(question);
+  };
+
+  const send = async (overrideInput?: string) => {
+    const trimmed = (overrideInput || input).trim();
     if (!trimmed || isLoading) return;
 
     const userMsg: Message = { role: "user", content: trimmed };
@@ -86,7 +90,6 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
     setInput("");
     setIsLoading(true);
 
-    // Save user message
     saveMessage("user", trimmed);
 
     let assistantSoFar = "";
@@ -107,10 +110,10 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
       await streamChat({
         messages: [...messages, userMsg],
         documentId: documentId || undefined,
+        webSearch: webSearchEnabled,
         onDelta: upsertAssistant,
         onDone: () => {
           setIsLoading(false);
-          // Save assistant message
           if (assistantSoFar) saveMessage("assistant", assistantSoFar);
         },
         onError: (error) => {
@@ -136,17 +139,19 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
               {documentName ? `Chat with "${documentName}"` : "DocuMind AI"}
             </h2>
           </div>
-          {messages.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClearHistory}
-              className="text-muted-foreground hover:text-destructive gap-1.5 text-xs"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Clear History
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {messages.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearHistory}
+                className="text-muted-foreground hover:text-destructive gap-1.5 text-xs"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Clear
+              </Button>
+            )}
+          </div>
         </div>
         {!documentId && (
           <p className="text-sm text-muted-foreground mt-1">
@@ -191,7 +196,12 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
           </motion.div>
         )}
         {messages.map((msg, i) => (
-          <ChatMessage key={i} role={msg.role} content={msg.content} />
+          <ChatMessage
+            key={i}
+            role={msg.role}
+            content={msg.content}
+            onFollowUp={handleFollowUp}
+          />
         ))}
         {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-3">
@@ -218,13 +228,27 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
           }}
           className="flex gap-2"
         >
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={documentId ? "Ask about your document..." : "Type a message..."}
-            disabled={isLoading}
-            className="flex-1 px-4 py-3 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm"
-          />
+          <div className="flex-1 flex items-center gap-2 px-4 py-2 rounded-xl border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={documentId ? "Ask about your document..." : "Type a message..."}
+              disabled={isLoading}
+              className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => setWebSearchEnabled(!webSearchEnabled)}
+              className={`p-1.5 rounded-md transition-colors ${
+                webSearchEnabled
+                  ? "text-blue-500 bg-blue-500/10"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              title={webSearchEnabled ? "Web knowledge enabled" : "Web knowledge disabled"}
+            >
+              <Globe className="w-4 h-4" />
+            </button>
+          </div>
           <Button
             type="submit"
             disabled={!input.trim() || isLoading}
@@ -233,6 +257,9 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
             <Send className="w-4 h-4" />
           </Button>
         </form>
+        <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
+          {webSearchEnabled ? "🌐 Web knowledge is ON — answers include additional context" : "Web knowledge is OFF — answers use document only"}
+        </p>
       </div>
     </div>
   );
