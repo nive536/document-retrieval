@@ -53,9 +53,9 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
   };
 
   // Parse content sections
-  const sourceMatch = content.match(/---\n📄\s?\*\*Source:\*\*.*/s);
-  const followUpMatch = content.match(/---\n💡\s?\*\*Follow-up questions:\*\*\n([\s\S]*?)(?=\n---|$)/);
-  const webSourceMatch = content.match(/🌐\s?\*\*Web Knowledge Sources:\*\*\n([\s\S]*?)(?=\n---|$)/);
+  const sourceMatch = content.match(/📄\s?\*\*Sources?:\*\*\n([\s\S]*?)(?=\n---|🌐|💡|$)/);
+  const followUpMatch = content.match(/💡\s?\*\*Follow-up questions:\*\*\n([\s\S]*?)(?=\n---|$)/);
+  const webSourceMatch = content.match(/🌐\s?\*\*Web Knowledge Sources:\*\*\n([\s\S]*?)(?=\n---|💡|$)/);
 
   // Extract follow-up questions
   const followUpQuestions: string[] = [];
@@ -64,6 +64,16 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
     for (const line of lines) {
       const q = line.replace(/^-\s*/, "").trim();
       if (q) followUpQuestions.push(q);
+    }
+  }
+
+  // Extract document sources
+  const docSources: string[] = [];
+  if (sourceMatch) {
+    const lines = sourceMatch[1].split("\n");
+    for (const line of lines) {
+      const s = line.replace(/^-\s*/, "").trim();
+      if (s) docSources.push(s);
     }
   }
 
@@ -77,24 +87,12 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
     }
   }
 
-  // Clean main content (remove follow-up and source sections for main display)
+  // Clean main content
   let mainContent = content;
-  // Remove follow-up section
-  const followUpIdx = mainContent.indexOf("---\n💡 **Follow-up questions:**");
-  if (followUpIdx !== -1) {
-    mainContent = mainContent.slice(0, followUpIdx).trim();
+  for (const marker of ["---\n📄", "📄 **Source", "🌐 **Web", "---\n💡", "💡 **Follow"]) {
+    const idx = mainContent.indexOf(marker);
+    if (idx !== -1) mainContent = mainContent.slice(0, idx);
   }
-  // Remove web sources section from main content
-  const webIdx = mainContent.indexOf("🌐 **Web Knowledge Sources:**");
-  if (webIdx !== -1) {
-    mainContent = mainContent.slice(0, webIdx).trim();
-  }
-  // Remove doc source from main content
-  const docIdx = mainContent.indexOf("📄 **Source:**");
-  if (docIdx !== -1) {
-    mainContent = mainContent.slice(0, docIdx).trim();
-  }
-  // Clean trailing ---
   mainContent = mainContent.replace(/\n---\s*$/, "").trim();
 
   return (
