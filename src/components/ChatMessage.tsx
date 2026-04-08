@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { Bot, User, Copy, Check, Volume2, VolumeX, Globe, FileText } from "lucide-react";
@@ -8,6 +8,36 @@ interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
   onFollowUp?: (question: string) => void;
+}
+
+function MermaidDiagram({ chart }: { chart: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [svg, setSvg] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const mermaid = (await import("mermaid")).default;
+        mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "loose" });
+        const id = `mermaid-${Math.random().toString(36).slice(2)}`;
+        const { svg: rendered } = await mermaid.render(id, chart);
+        if (!cancelled) setSvg(rendered);
+      } catch (e) {
+        console.error("Mermaid render error:", e);
+        if (!cancelled) setSvg(`<pre style="color:red">Diagram render failed</pre>`);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [chart]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="my-4 p-4 bg-muted/50 rounded-xl border border-border overflow-x-auto"
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
 }
 
 export default function ChatMessage({ role, content, onFollowUp }: ChatMessageProps) {
@@ -57,31 +87,25 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
   const followUpMatch = content.match(/💡\s?\*\*Follow-up questions:\*\*\n([\s\S]*?)(?=\n---|$)/);
   const webSourceMatch = content.match(/🌐\s?\*\*Web Knowledge Sources:\*\*\n([\s\S]*?)(?=\n---|💡|$)/);
 
-  // Extract follow-up questions
   const followUpQuestions: string[] = [];
   if (followUpMatch) {
-    const lines = followUpMatch[1].split("\n");
-    for (const line of lines) {
+    for (const line of followUpMatch[1].split("\n")) {
       const q = line.replace(/^-\s*/, "").trim();
       if (q) followUpQuestions.push(q);
     }
   }
 
-  // Extract document sources
   const docSources: string[] = [];
   if (sourceMatch) {
-    const lines = sourceMatch[1].split("\n");
-    for (const line of lines) {
+    for (const line of sourceMatch[1].split("\n")) {
       const s = line.replace(/^-\s*/, "").trim();
       if (s) docSources.push(s);
     }
   }
 
-  // Extract web sources
   const webSources: string[] = [];
   if (webSourceMatch) {
-    const lines = webSourceMatch[1].split("\n");
-    for (const line of lines) {
+    for (const line of webSourceMatch[1].split("\n")) {
       const s = line.replace(/^-\s*/, "").trim();
       if (s) webSources.push(s);
     }
@@ -94,6 +118,26 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
     if (idx !== -1) mainContent = mainContent.slice(0, idx);
   }
   mainContent = mainContent.replace(/\n---\s*$/, "").trim();
+
+  // Extract mermaid blocks and render them separately
+  const parts: { type: "text" | "mermaid" | "image"; content: string }[] = [];
+  const mermaidRegex = /```mermaid\n([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = mermaidRegex.exec(mainContent)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: "text", content: mainContent.slice(lastIndex, match.index) });
+    }
+    parts.push({ type: "mermaid", content: match[1].trim() });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < mainContent.length) {
+    parts.push({ type: "text", content: mainContent.slice(lastIndex) });
+  }
+  if (parts.length === 0) {
+    parts.push({ type: "text", content: mainContent });
+  }
 
   return (
     <motion.div
@@ -121,8 +165,14 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
           {isUser ? (
             <p className="text-sm leading-relaxed">{content}</p>
           ) : (
-            <div className="prose prose-sm max-w-none text-card-foreground prose-headings:text-card-foreground prose-p:text-card-foreground prose-li:text-card-foreground prose-strong:text-card-foreground prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:rounded">
-              <ReactMarkdown>{mainContent}</ReactMarkdown>
+            <div className="prose prose-sm max-w-none text-card-foreground prose-headings:text-card-foreground prose-p:text-card-foreground prose-li:text-card-foreground prose-strong:text-card-foreground prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:rounded prose-img:rounded-xl prose-img:shadow-lg prose-img:max-w-full">
+              {parts.map((part, i) =>
+                part.type === "mermaid" ? (
+                  <MermaidDiagram key={i} chart={part.content} />
+                ) : (
+                  <ReactMarkdown key={i}>{part.content}</ReactMarkdown>
+                )
+              )}
             </div>
           )}
         </div>
@@ -181,7 +231,7 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
           </motion.div>
         )}
 
-        {/* Action buttons for assistant messages */}
+        {/* Action buttons */}
         {!isUser && (
           <div className="flex items-center gap-1 pl-1">
             <button
