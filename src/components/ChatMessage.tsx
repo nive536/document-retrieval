@@ -119,17 +119,24 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
   }
   mainContent = mainContent.replace(/\n---\s*$/, "").trim();
 
-  // Extract mermaid blocks and render them separately
+  // Extract mermaid blocks and images, render them separately
   const parts: { type: "text" | "mermaid" | "image"; content: string }[] = [];
-  const mermaidRegex = /```mermaid\n([\s\S]*?)```/g;
+  // Match both mermaid blocks and markdown images
+  const blockRegex = /```mermaid\n([\s\S]*?)```|!\[([^\]]*)\]\(([^)]+)\)/g;
   let lastIndex = 0;
   let match;
 
-  while ((match = mermaidRegex.exec(mainContent)) !== null) {
+  while ((match = blockRegex.exec(mainContent)) !== null) {
     if (match.index > lastIndex) {
       parts.push({ type: "text", content: mainContent.slice(lastIndex, match.index) });
     }
-    parts.push({ type: "mermaid", content: match[1].trim() });
+    if (match[1] !== undefined) {
+      // Mermaid block
+      parts.push({ type: "mermaid", content: match[1].trim() });
+    } else if (match[3]) {
+      // Image
+      parts.push({ type: "image", content: match[3] });
+    }
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < mainContent.length) {
@@ -169,6 +176,15 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
               {parts.map((part, i) =>
                 part.type === "mermaid" ? (
                   <MermaidDiagram key={i} chart={part.content} />
+                ) : part.type === "image" ? (
+                  <div key={i} className="my-4">
+                    <img
+                      src={part.content}
+                      alt="Generated image"
+                      className="rounded-xl shadow-lg max-w-full"
+                      loading="lazy"
+                    />
+                  </div>
                 ) : (
                   <ReactMarkdown key={i}>{part.content}</ReactMarkdown>
                 )
