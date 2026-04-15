@@ -153,21 +153,30 @@ serve(async (req) => {
       }
     }
 
+    const sourcesList = docNamesList.length > 0
+      ? `\n\nAfter your answer, ALWAYS append this exact block at the very end:\n\n---\n📚 **Resources:**\n${docNamesList.map(n => `- 📄 ${n}`).join("\n")}${webSearch ? "\n- 🌐 Web Knowledge" : ""}`
+      : webSearch
+        ? `\n\nAfter your answer, ALWAYS append this exact block at the very end:\n\n---\n📚 **Resources:**\n- 🌐 Web Knowledge`
+        : "";
+
     const systemPrompt = `You are DocuMind, a concise and precise AI assistant.${documentContext}${webContext}
 
 STRICT RULES:
-1. Answer ONLY the specific question asked. Nothing more.
-2. Be extremely concise — use the fewest words possible while being complete and accurate.
-3. Do NOT add introductions, conclusions, summaries, tips, advice, disclaimers, or extra context the user did not ask for.
-4. Do NOT add "Sources", "References", "Follow-up questions", or any trailing sections.
-5. If the answer is a single sentence, give a single sentence. Do not pad it.
-6. Use markdown formatting (headings, lists, bold, code blocks) only when the content genuinely needs structure.
-7. Never speculate. If you don't know, say "I don't know" — nothing more.
+1. Answer ONLY the specific question asked. Be concise and accurate.
+2. Do NOT add introductions, conclusions, summaries, tips, advice, or disclaimers.
+3. Use markdown formatting (headings, lists, bold, code blocks) when the content needs structure.
+4. Never speculate. If you don't know, say "I don't know."
 
-VISUAL CONTENT (only when explicitly asked):
-- Flowcharts/diagrams → Mermaid code block (\`\`\`mermaid)
-- Image generation → [GENERATE_IMAGE: description]
-- Tables → markdown table syntax`;
+TABLES:
+- When the user asks for data comparison, lists of items with attributes, or any structured data, ALWAYS use markdown tables.
+- Use proper markdown table syntax with headers: | Col1 | Col2 |\n|------|------|\n| val | val |
+
+VISUAL CONTENT:
+- When the user asks for a flowchart, diagram, process flow, or architecture → use Mermaid code blocks (\`\`\`mermaid)
+- When the user asks to "generate an image", "draw", "create a picture", "show me an illustration", or any visual artwork → output exactly: [GENERATE_IMAGE: detailed description of what to generate]
+- You can include MULTIPLE [GENERATE_IMAGE: ...] tags if multiple images are requested.
+
+IMPORTANT: For flowcharts and diagrams, ALWAYS use Mermaid syntax. For artistic/realistic images, ALWAYS use [GENERATE_IMAGE: ...].${sourcesList}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
