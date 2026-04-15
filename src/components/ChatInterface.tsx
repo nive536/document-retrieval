@@ -141,24 +141,34 @@ export default function ChatInterface({ documentId, documentName }: ChatInterfac
         webSearch: webSearchEnabled,
         onDelta: upsertAssistant,
         onDone: async () => {
-          // Check for image generation tags in the response
-          const imageMatch = assistantSoFar.match(/\[GENERATE_IMAGE:\s*(.+?)\]/);
-          if (imageMatch) {
-            const imagePrompt = imageMatch[1];
-            const imageUrl = await generateImage(imagePrompt);
+          // Check for ALL image generation tags in the response
+          const imageRegex = /\[GENERATE_IMAGE:\s*(.+?)\]/g;
+          let match;
+          const imageMatches: { full: string; prompt: string }[] = [];
+          while ((match = imageRegex.exec(assistantSoFar)) !== null) {
+            imageMatches.push({ full: match[0], prompt: match[1] });
+          }
+
+          for (const img of imageMatches) {
+            const imageUrl = await generateImage(img.prompt);
             if (imageUrl) {
               assistantSoFar = assistantSoFar.replace(
-                imageMatch[0],
+                img.full,
                 `\n\n![Generated Image](${imageUrl})\n`
               );
-              setMessages((prev) =>
-                prev.map((m, i) =>
-                  i === prev.length - 1 && m.role === "assistant"
-                    ? { ...m, content: assistantSoFar }
-                    : m
-                )
-              );
+            } else {
+              assistantSoFar = assistantSoFar.replace(img.full, "\n\n*(Image generation failed)*\n");
             }
+          }
+
+          if (imageMatches.length > 0) {
+            setMessages((prev) =>
+              prev.map((m, i) =>
+                i === prev.length - 1 && m.role === "assistant"
+                  ? { ...m, content: assistantSoFar }
+                  : m
+              )
+            );
           }
           setIsLoading(false);
           if (assistantSoFar) saveMessage("assistant", assistantSoFar);
