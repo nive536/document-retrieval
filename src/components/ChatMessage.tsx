@@ -176,6 +176,15 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
               {parts.map((part, i) =>
                 part.type === "mermaid" ? (
                   <MermaidDiagram key={i} chart={part.content} />
+                ) : part.type === "image" ? (
+                  <div key={i} className="my-4">
+                    <img
+                      src={part.content}
+                      alt="Generated image"
+                      className="rounded-xl shadow-lg max-w-full"
+                      loading="lazy"
+                    />
+                  </div>
                 ) : (
                   <ReactMarkdown key={i}>{part.content}</ReactMarkdown>
                 )
