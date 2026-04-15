@@ -40,48 +40,83 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     let documentContext = "";
-    let documentName = "";
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
 
-    // --- RAG: Semantic search for relevant chunks ---
-    if (documentId) {
+    // --- RAG: Search across ALL documents globally ---
+    const queryEmbedding = await generateEmbedding(lastUserMsg, LOVABLE_API_KEY);
+    const sourceDocNames = new Set<string>();
+
+    if (queryEmbedding) {
+      // If a specific document is selected, search within it first
+      if (documentId) {
+        const { data: chunks } = await supabase.rpc("match_chunks", {
+          query_embedding: JSON.stringify(queryEmbedding),
+          match_document_id: documentId,
+          match_threshold: 0.2,
+          match_count: 8,
+        });
+
+        if (chunks && chunks.length > 0) {
+          // Get document name
+          const { data: doc } = await supabase
+            .from("documents")
+            .select("name")
+            .eq("id", documentId)
+            .single();
+
+          if (doc) sourceDocNames.add(doc.name);
+
+          const relevantText = chunks
+            .map((c: any) => `[${doc?.name || "Document"} — Chunk ${c.chunk_index + 1}]\n${c.chunk_text}`)
+            .join("\n\n---\n\n");
+          documentContext += `\n\nRelevant sections from selected document:\n${relevantText}`;
+        }
+      }
+
+      // Also search globally across ALL documents
+      const { data: globalChunks } = await supabase.rpc("match_chunks_global", {
+        query_embedding: JSON.stringify(queryEmbedding),
+        match_threshold: 0.25,
+        match_count: 10,
+      });
+
+      if (globalChunks && globalChunks.length > 0) {
+        // Filter out chunks already included from the selected document
+        const additionalChunks = documentId
+          ? globalChunks.filter((c: any) => c.document_id !== documentId)
+          : globalChunks;
+
+        if (additionalChunks.length > 0) {
+          for (const c of additionalChunks) {
+            sourceDocNames.add(c.document_name);
+          }
+          const additionalText = additionalChunks
+            .map((c: any) => `[${c.document_name} — Chunk ${c.chunk_index + 1}, Relevance: ${(c.similarity * 100).toFixed(1)}%]\n${c.chunk_text}`)
+            .join("\n\n---\n\n");
+          documentContext += `\n\nAdditional relevant sections from other documents in the knowledge base:\n${additionalText}`;
+        }
+      }
+    } else if (documentId) {
+      // Fallback: load full text of selected document
       const { data: doc } = await supabase
         .from("documents")
         .select("name, extracted_text")
         .eq("id", documentId)
         .single();
 
-      if (doc) {
-        documentName = doc.name;
-
-        // Try vector search first
-        const queryEmbedding = await generateEmbedding(lastUserMsg, LOVABLE_API_KEY);
-        if (queryEmbedding) {
-          const { data: chunks, error: matchError } = await supabase.rpc("match_chunks", {
-            query_embedding: JSON.stringify(queryEmbedding),
-            match_document_id: documentId,
-            match_threshold: 0.2,
-            match_count: 8,
-          });
-
-          if (!matchError && chunks && chunks.length > 0) {
-            const relevantText = chunks
-              .map((c: any, i: number) => `[Chunk ${c.chunk_index + 1}, Relevance: ${(c.similarity * 100).toFixed(1)}%]\n${c.chunk_text}`)
-              .join("\n\n---\n\n");
-            documentContext = `\n\nYou have access to the following document:\nDocument Name: ${doc.name}\n\nThe following are the MOST RELEVANT sections retrieved via semantic search (RAG pipeline):\n\n${relevantText}\n\nFull document is also available for reference. Answer based on these relevant sections primarily. Cite the chunk numbers in your response.`;
-          } else {
-            // Fallback to full text
-            if (doc.extracted_text) {
-              documentContext = `\n\nYou have access to the following document:\nDocument Name: ${doc.name}\nDocument Content:\n${doc.extracted_text}\n\nAnswer questions based on this document.`;
-            }
-          }
-        } else if (doc.extracted_text) {
-          documentContext = `\n\nYou have access to the following document:\nDocument Name: ${doc.name}\nDocument Content:\n${doc.extracted_text}\n\nAnswer questions based on this document.`;
-        }
+      if (doc?.extracted_text) {
+        sourceDocNames.add(doc.name);
+        documentContext = `\n\nDocument: ${doc.name}\nContent:\n${doc.extracted_text}`;
       }
     }
 
-    // --- Web search for current trends/information ---
+    if (documentContext) {
+      documentContext = `\n\nYou have access to a knowledge base of uploaded documents. The following are the MOST RELEVANT sections retrieved via semantic search (RAG pipeline):${documentContext}`;
+    }
+
+    const docNamesList = Array.from(sourceDocNames);
+
+    // --- Web search ---
     let webContext = "";
     if (webSearch) {
       try {
@@ -96,11 +131,11 @@ serve(async (req) => {
             messages: [
               {
                 role: "system",
-                content: "You are a research assistant specializing in providing current, factual, and comprehensive information. Include specific facts, statistics, dates, URLs of notable sources, and recent developments. Be thorough and cite sources.",
+                content: "You are a research assistant. Provide current, factual, comprehensive information with specific facts, statistics, dates, and URLs of notable sources.",
               },
               {
                 role: "user",
-                content: `Provide detailed, up-to-date information and current trends on this topic: "${lastUserMsg}". Include recent developments, statistics, and cite specific sources (websites, papers, reports).`,
+                content: `Provide detailed, up-to-date information on: "${lastUserMsg}". Include recent developments, statistics, and cite specific sources with URLs.`,
               },
             ],
             stream: false,
@@ -110,7 +145,7 @@ serve(async (req) => {
           const webData = await webRes.json();
           const webContent = webData.choices?.[0]?.message?.content;
           if (webContent) {
-            webContext = `\n\n--- ADDITIONAL WEB KNOWLEDGE ---\nThe following is supplementary information from web sources:\n${webContent}\n--- END ADDITIONAL WEB KNOWLEDGE ---\n`;
+            webContext = `\n\n--- ADDITIONAL WEB KNOWLEDGE ---\n${webContent}\n--- END ---\n`;
           }
         }
       } catch (e) {
@@ -118,35 +153,37 @@ serve(async (req) => {
       }
     }
 
-    const systemPrompt = `You are DocuMind, a professional document intelligence assistant with advanced capabilities. You provide precise, well-researched, and authoritative answers.${documentContext}${webContext}
+    const systemPrompt = `You are DocuMind, a professional document intelligence assistant.${documentContext}${webContext}
 
 CAPABILITIES:
-- You can analyze documents using RAG (Retrieval-Augmented Generation) with semantic vector search
-- You can provide information from web sources when enabled
-- When the user asks for a flowchart, diagram, or visual representation, generate it using Mermaid syntax wrapped in a mermaid code block
-- When the user asks for a table, create well-formatted markdown tables
-- When the user asks for an image, flowchart image, or visual diagram to be GENERATED as an image, respond with the tag [GENERATE_IMAGE: detailed description of the image to generate]
+- Analyze documents using RAG with semantic vector search across ALL uploaded documents
+- Provide information from web sources when enabled
+- Generate visual diagrams using Mermaid syntax
+- Generate images when asked
+- Create well-formatted markdown tables
 
-RESPONSE FORMAT RULES:
-1. Structure every answer with clear markdown: use ## headings, bullet points, numbered lists, bold key terms, and code blocks where relevant.
-2. Be precise and factual. Never speculate—if you don't know something, state it clearly.
-3. When answering from a document, cite the specific chunk number, section, or paragraph where the information was found.
-4. For flowcharts and diagrams, use Mermaid syntax in a \`\`\`mermaid code block.
-5. For tables, use proper markdown table syntax with headers.
-6. After your main answer, ALWAYS include these sections:
+CRITICAL INSTRUCTIONS FOR VISUAL CONTENT:
+1. **Flowcharts & Diagrams**: When the user asks for a flowchart, diagram, process flow, architecture, mind map, or any visual representation — ALWAYS generate it as a Mermaid code block. Use \`\`\`mermaid syntax. Make diagrams detailed, well-structured, and visually organized with proper node shapes and connections.
+2. **Image Generation**: When the user explicitly asks for an IMAGE, a picture, a visual illustration, or says "generate an image of..." — respond with the tag [GENERATE_IMAGE: detailed visual description]. Be very specific in the description for best results.
+3. **Tables**: When the user asks for tabular data, ALWAYS use proper markdown table syntax with headers and alignment.
+
+RESPONSE FORMAT:
+- Use ## headings, bullet points, numbered lists, bold key terms, and code blocks
+- Be precise and factual. Never speculate.
+- When answering from documents, cite the document name and chunk/section
+
+MANDATORY END SECTIONS (always include these at the end):
 
 ---
 📄 **Sources:**
-${documentName ? `- **${documentName}** — cite specific chunks/sections referenced` : "- State if answer is from general knowledge"}
-${webSearch ? `\n🌐 **Web Knowledge Sources:**\n- [Cite specific web sources with URLs where possible]` : ""}
+${docNamesList.length > 0 ? docNamesList.map(n => `- **${n}**`).join("\n") : "- General knowledge (no documents matched)"}
+${webSearch ? `\n🌐 **Web Sources:**\n- [Cite specific URLs from web knowledge above]` : ""}
 
 ---
 💡 **Follow-up questions:**
 - [Question 1]
 - [Question 2]
-- [Question 3]
-
-7. CRITICAL: Source citations must be SPECIFIC. Reference exact chunk numbers, sections, or web sources.`;
+- [Question 3]`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
