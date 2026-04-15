@@ -82,42 +82,7 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
     window.speechSynthesis.speak(utterance);
   };
 
-  // Parse content sections
-  const sourceMatch = content.match(/📄\s?\*\*Sources?:\*\*\n([\s\S]*?)(?=\n---|🌐|💡|$)/);
-  const followUpMatch = content.match(/💡\s?\*\*Follow-up questions:\*\*\n([\s\S]*?)(?=\n---|$)/);
-  const webSourceMatch = content.match(/🌐\s?\*\*Web Knowledge Sources:\*\*\n([\s\S]*?)(?=\n---|💡|$)/);
-
-  const followUpQuestions: string[] = [];
-  if (followUpMatch) {
-    for (const line of followUpMatch[1].split("\n")) {
-      const q = line.replace(/^-\s*/, "").trim();
-      if (q) followUpQuestions.push(q);
-    }
-  }
-
-  const docSources: string[] = [];
-  if (sourceMatch) {
-    for (const line of sourceMatch[1].split("\n")) {
-      const s = line.replace(/^-\s*/, "").trim();
-      if (s) docSources.push(s);
-    }
-  }
-
-  const webSources: string[] = [];
-  if (webSourceMatch) {
-    for (const line of webSourceMatch[1].split("\n")) {
-      const s = line.replace(/^-\s*/, "").trim();
-      if (s) webSources.push(s);
-    }
-  }
-
-  // Clean main content
-  let mainContent = content;
-  for (const marker of ["---\n📄", "📄 **Source", "🌐 **Web", "---\n💡", "💡 **Follow"]) {
-    const idx = mainContent.indexOf(marker);
-    if (idx !== -1) mainContent = mainContent.slice(0, idx);
-  }
-  mainContent = mainContent.replace(/\n---\s*$/, "").trim();
+  const mainContent = content;
 
   // Extract mermaid blocks and images, render them separately
   const parts: { type: "text" | "mermaid" | "image"; content: string }[] = [];
