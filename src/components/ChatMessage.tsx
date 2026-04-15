@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
-import { Bot, User, Copy, Check, Volume2, VolumeX, Globe, FileText } from "lucide-react";
+import { Bot, User, Copy, Check, Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
 
 interface ChatMessageProps {
@@ -82,42 +82,7 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
     window.speechSynthesis.speak(utterance);
   };
 
-  // Parse content sections
-  const sourceMatch = content.match(/📄\s?\*\*Sources?:\*\*\n([\s\S]*?)(?=\n---|🌐|💡|$)/);
-  const followUpMatch = content.match(/💡\s?\*\*Follow-up questions:\*\*\n([\s\S]*?)(?=\n---|$)/);
-  const webSourceMatch = content.match(/🌐\s?\*\*Web Knowledge Sources:\*\*\n([\s\S]*?)(?=\n---|💡|$)/);
-
-  const followUpQuestions: string[] = [];
-  if (followUpMatch) {
-    for (const line of followUpMatch[1].split("\n")) {
-      const q = line.replace(/^-\s*/, "").trim();
-      if (q) followUpQuestions.push(q);
-    }
-  }
-
-  const docSources: string[] = [];
-  if (sourceMatch) {
-    for (const line of sourceMatch[1].split("\n")) {
-      const s = line.replace(/^-\s*/, "").trim();
-      if (s) docSources.push(s);
-    }
-  }
-
-  const webSources: string[] = [];
-  if (webSourceMatch) {
-    for (const line of webSourceMatch[1].split("\n")) {
-      const s = line.replace(/^-\s*/, "").trim();
-      if (s) webSources.push(s);
-    }
-  }
-
-  // Clean main content
-  let mainContent = content;
-  for (const marker of ["---\n📄", "📄 **Source", "🌐 **Web", "---\n💡", "💡 **Follow"]) {
-    const idx = mainContent.indexOf(marker);
-    if (idx !== -1) mainContent = mainContent.slice(0, idx);
-  }
-  mainContent = mainContent.replace(/\n---\s*$/, "").trim();
+  const mainContent = content;
 
   // Extract mermaid blocks and images, render them separately
   const parts: { type: "text" | "mermaid" | "image"; content: string }[] = [];
@@ -193,59 +158,8 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
           )}
         </div>
 
-        {/* Source attribution tags */}
-        {!isUser && (docSources.length > 0 || webSources.length > 0) && (
-          <div className="flex flex-col gap-2">
-            {docSources.map((src, i) => (
-              <motion.div
-                key={`doc-${i}`}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="flex items-start gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20"
-              >
-                <FileText className="w-3 h-3 text-primary mt-0.5 flex-shrink-0" />
-                <span className="text-xs font-medium text-primary">
-                  {src.replace(/\*\*/g, "")}
-                </span>
-              </motion.div>
-            ))}
-            {webSources.map((src, i) => (
-              <motion.div
-                key={`web-${i}`}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 + i * 0.05 }}
-                className="flex items-start gap-1.5 px-3 py-1.5 rounded-lg bg-accent/50 border border-border"
-              >
-                <Globe className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0" />
-                <span className="text-xs font-medium text-muted-foreground">
-                  {src.replace(/\*\*/g, "")}
-                </span>
-              </motion.div>
-            ))}
-          </div>
-        )}
 
-        {/* Follow-up suggestion chips */}
-        {!isUser && followUpQuestions.length > 0 && onFollowUp && (
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="flex flex-wrap gap-2"
-          >
-            {followUpQuestions.map((q, i) => (
-              <button
-                key={i}
-                onClick={() => onFollowUp(q)}
-                className="px-3 py-1.5 rounded-full border border-border bg-background text-xs text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-primary/5 transition-all duration-200"
-              >
-                💡 {q}
-              </button>
-            ))}
-          </motion.div>
-        )}
+
 
         {/* Action buttons */}
         {!isUser && (

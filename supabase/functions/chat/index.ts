@@ -168,22 +168,11 @@ CRITICAL INSTRUCTIONS FOR VISUAL CONTENT:
 3. **Tables**: When the user asks for tabular data, ALWAYS use proper markdown table syntax with headers and alignment.
 
 RESPONSE FORMAT:
-- Use ## headings, bullet points, numbered lists, bold key terms, and code blocks
-- Be precise and factual. Never speculate.
-- When answering from documents, cite the document name and chunk/section
-
-MANDATORY END SECTIONS (always include these at the end):
-
----
-📄 **Sources:**
-${docNamesList.length > 0 ? docNamesList.map(n => `- **${n}**`).join("\n") : "- General knowledge (no documents matched)"}
-${webSearch ? `\n🌐 **Web Sources:**\n- [Cite specific URLs from web knowledge above]` : ""}
-
----
-💡 **Follow-up questions:**
-- [Question 1]
-- [Question 2]
-- [Question 3]`;
+- Be precise, factual, and concise. Answer ONLY what was asked — do not add extra points, tips, or tangential information.
+- Use ## headings, bullet points, numbered lists, bold key terms, and code blocks where relevant.
+- Never speculate. If you don't know, say so.
+- Do NOT include any "Sources", "Resources", "References", "Follow-up questions", or similar sections at the end.
+- End your answer naturally after the last relevant point. No trailing sections.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
