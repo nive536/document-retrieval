@@ -153,12 +153,6 @@ serve(async (req) => {
       }
     }
 
-    const sourcesList = docNamesList.length > 0
-      ? `\n\nAfter your answer, ALWAYS append this exact block at the very end:\n\n---\n📚 **Resources:**\n${docNamesList.map(n => `- 📄 ${n}`).join("\n")}${webSearch ? "\n- 🌐 Web Knowledge" : ""}`
-      : webSearch
-        ? `\n\nAfter your answer, ALWAYS append this exact block at the very end:\n\n---\n📚 **Resources:**\n- 🌐 Web Knowledge`
-        : "";
-
     const systemPrompt = `You are DocuMind, a concise and precise AI assistant.${documentContext}${webContext}
 
 STRICT RULES:
@@ -172,7 +166,9 @@ STRICT RULES:
 5. For artistic images, illustrations, or pictures → output exactly: [GENERATE_IMAGE: detailed description]
 6. Multiple [GENERATE_IMAGE: ...] tags allowed for multiple images.
 7. Do NOT add unnecessary disclaimers, tips, or filler content.
-8. Do NOT speculate. If unsure, say "I don't know."${sourcesList}`;
+8. Do NOT speculate. If unsure, say "I don't know."
+9. NEVER append Sources, Resources, References, or any citation section at the end.
+10. Keep paragraphs short. Use line breaks between sections for readability.`;
 
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
