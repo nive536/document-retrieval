@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Bot, User, Copy, Check, Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
 
@@ -137,7 +138,7 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
           {isUser ? (
             <p className="text-sm leading-relaxed">{content}</p>
           ) : (
-            <div className="prose prose-sm max-w-none text-card-foreground prose-headings:text-card-foreground prose-p:text-card-foreground prose-li:text-card-foreground prose-strong:text-card-foreground prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:rounded prose-img:rounded-xl prose-img:shadow-lg prose-img:max-w-full">
+            <div className="prose prose-sm max-w-none text-card-foreground prose-headings:text-card-foreground prose-p:text-card-foreground prose-li:text-card-foreground prose-strong:text-card-foreground prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:rounded prose-img:rounded-xl prose-img:shadow-lg prose-img:max-w-full prose-table:border-collapse prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-2 prose-th:bg-muted prose-th:text-left prose-th:font-semibold prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-2">
               {parts.map((part, i) =>
                 part.type === "mermaid" ? (
                   <MermaidDiagram key={i} chart={part.content} />
@@ -151,7 +152,7 @@ export default function ChatMessage({ role, content, onFollowUp }: ChatMessagePr
                     />
                   </div>
                 ) : (
-                  <ReactMarkdown key={i}>{part.content}</ReactMarkdown>
+                  <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>{part.content}</ReactMarkdown>
                 )
               )}
             </div>
